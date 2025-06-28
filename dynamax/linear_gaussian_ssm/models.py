@@ -410,7 +410,7 @@ class LinearGaussianSSM(SSM):
         Expxn = posterior.smoothed_cross_covariances
 
         # Append bias to the inputs
-        inputs = jnp.concatenate((inputs, jnp.ones((num_timesteps, 1))), axis=1)
+        inputs = jnp.pad(inputs, [(0, 0), (0, 1)], constant_values=1.0)
         up = inputs[:-1]
         u = inputs
         y = emissions
