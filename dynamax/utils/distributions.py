@@ -10,6 +10,7 @@ tfd = tfp.distributions
 tfb = tfp.bijectors
 
 from dynamax.utils.utils import psd_solve
+from jax.scipy.linalg import solve, solve_triangular
 
 
 class InverseWishart(tfd.TransformedDistribution):
@@ -43,6 +44,7 @@ class InverseWishart(tfd.TransformedDistribution):
         dim = scale.shape[-1]
         eye = jnp.broadcast_to(jnp.eye(dim), scale.shape)
         inv_scale = psd_solve(A=scale, b=eye)
+        self._inv_scale = inv_scale
         inv_scale_tril = jnp.linalg.cholesky(inv_scale)
 
         super().__init__(
@@ -69,7 +71,8 @@ class InverseWishart(tfd.TransformedDistribution):
             # `default_constraining_bijector_fn`, `specifies_shape`, etc.; see
             # the `ParameterProperties` documentation for details.
             df=tfp.util.ParameterProperties(event_ndims=0),
-            scale=tfp.util.ParameterProperties(event_ndims=2))
+            scale=tfp.util.ParameterProperties(event_ndims=2), 
+            inv_scale=tfp.util.ParameterProperties(event_ndims=2))
 
     @property
     def df(self):
@@ -80,6 +83,11 @@ class InverseWishart(tfd.TransformedDistribution):
     def scale(self):
         """Return the scale matrix."""
         return self._scale
+
+    @property
+    def inv_scale(self):
+        """Return the precision matrix."""
+        return self._inv_scale
 
     def _mean(self):
         """Compute the mean of the distribution."""
@@ -186,20 +194,19 @@ class MatrixNormalPrecision(tfd.TransformedDistribution):
     Returns:
         A tfp.Distribution object.
     """
-    def __init__(self, loc, row_covariance, col_precision): 
+    def __init__(self, loc, row_covariance, col_covariance): 
         self._shape = loc.shape
         self._loc = loc
         self._row_cov = row_covariance
-        self._col_precision = col_precision
-        self._col_cov = jnp.linalg.inv(col_precision)
+        self._col_cov = col_covariance
         # Vectorize by row, which is consistent with the tfb.Reshape bijector
         self._vec_mean = jnp.ravel(loc)
-        self._vec_cov = jnp.kron(row_covariance, self._col_cov)
+        self._vec_cov = jnp.kron(row_covariance, col_covariance)
         super().__init__(tfd.MultivariateNormalFullCovariance(self._vec_mean, self._vec_cov),
                          tfb.Reshape(event_shape_out=self._shape))
 
         # Replace the default MultivariateNormalFullCovariance parameters with the MatrixNormal ones
-        self._parameters = dict(loc=loc, row_covariance=row_covariance, col_precision=col_precision)
+        self._parameters = dict(loc=loc, row_covariance=row_covariance, col_covariance=col_covariance)
 
     def __new__(cls, *args, **kwargs):
         """ Patch for tfp 0.18.0.
@@ -218,7 +225,7 @@ class MatrixNormalPrecision(tfd.TransformedDistribution):
             # the `ParameterProperties` documentation for details.
             loc=tfp.util.ParameterProperties(event_ndims=2),
             row_covariance=tfp.util.ParameterProperties(event_ndims=2),
-            col_precision=tfp.util.ParameterProperties(event_ndims=2))
+            col_covariance=tfp.util.ParameterProperties(event_ndims=2))
 
     @property
     def loc(self):
@@ -229,11 +236,11 @@ class MatrixNormalPrecision(tfd.TransformedDistribution):
     def row_covariance(self):
         """Return the covariance matrix of the rows."""
         return self._row_cov
-
+    
     @property
-    def col_precision(self):
-        """Return the precision matrix of the columns."""
-        return self._col_precision
+    def col_covariance(self):
+        """Return the covariance matrix of the columns."""
+        return self._col_cov
 
     def _mode(self):
         """Compute the mode of the distribution."""
@@ -257,9 +264,12 @@ class MatrixNormalInverseWishart(tfd.JointDistributionSequential):
         self._matrix_normal_shape = loc.shape
         self._loc = loc
         self._col_precision = col_precision
+        dim = self._matrix_normal_shape[-1]
+        eye = jnp.broadcast_to(jnp.eye(dim), self._matrix_normal_shape[:-2] + (dim, dim))
+        self._col_covariance = psd_solve(col_precision, eye)
         self._df = df
         self._scale = scale
-        super().__init__([InverseWishart(df, scale), lambda Sigma: MatrixNormalPrecision(loc, Sigma, col_precision)])
+        super().__init__([InverseWishart(df, scale), lambda Sigma: MatrixNormalPrecision(loc, Sigma, self._col_covariance)])
 
         self._parameters = dict(loc=loc, col_precision=col_precision, df=df, scale=scale)
 
@@ -278,6 +288,11 @@ class MatrixNormalInverseWishart(tfd.JointDistributionSequential):
     def col_precision(self):
         """Return the column precision matrix."""
         return self._col_precision
+
+    @property
+    def col_covariance(self):
+        """Return the covariance matrix of the columns."""
+        return self._col_covariance
 
     @property
     def df(self):
@@ -336,8 +351,8 @@ def mniw_posterior_update(mniw_prior, sufficient_stats):
     # compute parameters of the posterior distribution
     Sxx = V_pri + SxxT
     Sxy = SxyT + V_pri @ M_pri.T
-    Syy = SyyT + M_pri @ V_pri @ M_pri.T
     M_pos = psd_solve(Sxx, Sxy).T
+    Syy = SyyT + M_pri @ V_pri @ M_pri.T
     V_pos = Sxx
     nu_pos = nu_pri + N
     Psi_pos = Psi_pri + Syy - M_pos @ Sxy
@@ -449,3 +464,5 @@ def nig_posterior_update(nig_prior, sufficient_stats):
                               mean_concentration=posterior_precision,
                               concentration=posterior_df,
                               scale=posterior_scale)
+
+
