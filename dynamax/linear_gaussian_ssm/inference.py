@@ -640,4 +640,4 @@ def lgssm_posterior_sample(key: PRNGKeyT,
         reverse=True,
     )
 
-    return jnp.vstack([states, last_state])
+    return jnp.vstack([states, last_state]), ll

@@ -348,12 +348,20 @@ def lgssm_smoother(params: ParamsLGSSM,
     initial_messages = _initialize_smoothing_messages(params, filtered_means, filtered_covs, inputs)
     final_messages = lax.associative_scan(_operator, initial_messages, reverse=True)
 
+    smoothed_mean = final_messages.g[:-1]
+    smoothed_mean_next = final_messages.g[1:]
+    smoothed_cov_next = final_messages.L[1:]
+
+    G = initial_messages.E[:-1]
+    smoothed_cross = G @ smoothed_cov_next + vmap(jnp.outer)(smoothed_mean, smoothed_mean_next)
+
     return PosteriorGSSMSmoothed(
         marginal_loglik=filtered_posterior.marginal_loglik,
         filtered_means=filtered_means,
         filtered_covariances=filtered_covs,
         smoothed_means=final_messages.g,
-        smoothed_covariances=final_messages.L
+        smoothed_covariances=final_messages.L,
+        smoothed_cross_covariances=smoothed_cross,
     )
 
 
@@ -411,4 +419,4 @@ def lgssm_posterior_sample(
 
     initial_messages = _initialize_sampling_messages(key, params, filtered_means, filtered_covs, inputs)
     _, samples = lax.associative_scan(_operator, initial_messages, reverse=True)
-    return samples
+    return samples, filtered_posterior.marginal_loglik
