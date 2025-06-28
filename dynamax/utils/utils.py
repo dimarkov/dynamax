@@ -116,7 +116,7 @@ def ensure_array_has_batch_dim(tree, instance_shapes):
     value is the array with an added batch dimension, with
     shape (1, T, D).
 
-    Example: If `tree` is an array of shape (N,TD) and
+    Example: If `tree` is an array of shape (N, T, D) and
     `instance_shapes` is a tuple (D,), then the return
     value is simply `tree`, since it already has a batch
     dimension (of length N).
