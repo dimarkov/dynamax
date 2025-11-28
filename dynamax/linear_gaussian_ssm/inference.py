@@ -628,16 +628,19 @@ def lgssm_posterior_sample(key: PRNGKeyT,
     key, this_key = jr.split(key, 2)
     last_state = MVN(filtered_means[-1], filtered_covs[-1]).sample(seed=this_key)
 
-    _, states = lax.scan(
-        _step,
-        last_state,
-        (
-            jr.split(key, num_timesteps - 1),
-            filtered_means[:-1],
-            filtered_covs[:-1],
-            jnp.arange(num_timesteps - 1),
-        ),
-        reverse=True,
-    )
+    if num_timesteps > 1:
+        _, states = lax.scan(
+            _step,
+            last_state,
+            (
+                jr.split(key, num_timesteps - 1),
+                filtered_means[:-1],
+                filtered_covs[:-1],
+                jnp.arange(num_timesteps - 1),
+            ),
+            reverse=True,
+        )
 
-    return jnp.vstack([states, last_state]), ll
+        return jnp.vstack([states, last_state]), ll
+    else:
+        return last_state[None], ll
