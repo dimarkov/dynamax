@@ -11,7 +11,7 @@ dependencies = [
     "jaxlib",
     "fastprogress",
     "optax",
-    "tensorflow_probability",
+    "tfp-nightly[jax]",
     "scikit-learn",
     "jaxtyping",
     "typing-extensions",
