@@ -464,5 +464,3 @@ def nig_posterior_update(nig_prior, sufficient_stats):
                               mean_concentration=posterior_precision,
                               concentration=posterior_df,
                               scale=posterior_scale)
-
-
