@@ -8,9 +8,9 @@ dynamic = ["version"]
 requires-python = ">= 3.10"
 dependencies = [
     "jax",
+    "tfp-nightly[jax]",
     "fastprogress",
     "optax",
-    "tfp-nightly[jax]",
     "scikit-learn",
     "jaxtyping",
     "typing-extensions",
