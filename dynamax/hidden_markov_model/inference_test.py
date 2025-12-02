@@ -5,6 +5,7 @@ import itertools as it
 import jax.numpy as jnp
 import jax.random as jr
 from jax import vmap
+
 import dynamax.hidden_markov_model.inference as core
 import dynamax.hidden_markov_model.parallel_inference as parallel
 from jax.scipy.special import logsumexp
@@ -364,6 +365,4 @@ def test_parallel_posterior_sample(
 
     # Compare the joint distributions
     assert jnp.allclose(blj_sample, blj, rtol=0, atol=eps)
-if __name__ == "__main__":
-    test_two_filter_vs_smoother_nonstationary()
-    test_hmm_non_stationary()
+
